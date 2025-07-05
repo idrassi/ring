@@ -160,7 +160,7 @@ void ring_hashtable_rebuild_gc ( void *pRingState,HashTable *pHashTable )
 {
 	HashItem **pOldArray  ;
 	int nOldLinkedLists, x, nNewIndex  ;
-	HashItem *pItem, *pNextItem  ;
+	HashItem *pItem, *pNextItem, *pItemIterator  ;
 
 	/* If the number of items doesn't meet the rebuild threshold, do nothing. */
 	if ( pHashTable->nItems != pHashTable->nRebuildSize ) {
@@ -186,13 +186,24 @@ void ring_hashtable_rebuild_gc ( void *pRingState,HashTable *pHashTable )
 		while ( pItem != NULL ) {
 			/* Save the next item in the old chain before we modify pItem->pNext */
 			pNextItem = pItem->pNext;
+			pItem->pNext = NULL;
 
 			/* Calculate the new bucket index in the new, larger table */
 			nNewIndex = ring_hashtable_hashkey(pHashTable, pItem->cKey);
-
-			/* Insert the item at the head of the new bucket's linked list */
-			pItem->pNext = pHashTable->pArray[nNewIndex];
-			pHashTable->pArray[nNewIndex] = pItem;
+			/* Re-link the item into the new table */
+			/* We use the same algorithm as in ring_hashtable_newitem_gc but without allocating new memory */
+			pItemIterator = pHashTable->pArray[nNewIndex];
+			if ( pItemIterator == NULL ) {
+				pHashTable->pArray[nNewIndex] = pItem;
+			}
+			else {
+				/* Find the last item in the chain */
+				while ( pItemIterator->pNext != NULL ) {
+					pItemIterator = pItemIterator->pNext ;
+				}
+				/* Link the old item to the end of the new chain */
+				pItemIterator->pNext = pItem;
+			}
 
 			/* Move to the next item in the old chain */
 			pItem = pNextItem;
